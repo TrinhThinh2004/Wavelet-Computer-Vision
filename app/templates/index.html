@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wavelet Image Search Engine</title>
+    <meta name="description" content="Ứng dụng tìm kiếm hình ảnh dựa trên hàm băm Wavelet - Wavelet Hash Image Search">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Background Particles -->
+    <div class="bg-particles" id="particles"></div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <div class="logo-icon">
+                        <svg viewBox="0 0 40 40" fill="none">
+                            <path d="M5 20C5 10 10 5 20 5C30 5 35 10 35 20C35 30 30 35 20 35C10 35 5 30 5 20Z" stroke="url(#g1)" stroke-width="2"/>
+                            <path d="M12 20L17 14L22 18L28 12" stroke="url(#g2)" stroke-width="2" stroke-linecap="round"/>
+                            <path d="M12 26L17 22L22 25L28 20" stroke="url(#g2)" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
+                            <defs>
+                                <linearGradient id="g1" x1="5" y1="5" x2="35" y2="35">
+                                    <stop stop-color="#6c5ce7"/><stop offset="1" stop-color="#00cec9"/>
+                                </linearGradient>
+                                <linearGradient id="g2" x1="12" y1="12" x2="28" y2="26">
+                                    <stop stop-color="#a29bfe"/><stop offset="1" stop-color="#81ecec"/>
+                                </linearGradient>
+                            </defs>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1>Wavelet Image Search</h1>
+                        <p class="subtitle">Tìm kiếm hình ảnh tương tự bằng hàm băm Wavelet & khoảng cách Hamming</p>
+                    </div>
+                </div>
+                <div class="db-stats" id="dbStats">
+                    <div class="stat-badge">
+                        <span class="stat-number" id="dbCount">0</span>
+                        <span class="stat-label">ảnh trong DB</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Tab Navigation -->
+        <div class="tabs">
+            <button class="tab active" data-tab="search" id="tabSearch">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                Tìm kiếm ảnh
+            </button>
+            <button class="tab" data-tab="database" id="tabDatabase">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                Cơ sở dữ liệu
+            </button>
+        </div>
+
+        <!-- Search Tab -->
+        <section class="tab-content active" id="searchTab">
+            <div class="search-layout">
+                <!-- Upload Zone -->
+                <div class="card upload-card">
+                    <h2 class="card-title">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        Upload ảnh truy vấn
+                    </h2>
+                    <div class="drop-zone" id="dropZone">
+                        <div class="drop-zone-content" id="dropContent">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.5">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                            </svg>
+                            <p>Kéo thả ảnh vào đây</p>
+                            <span>hoặc</span>
+                            <button class="btn btn-primary" id="browseBtn">Chọn file</button>
+                            <input type="file" id="fileInput" accept="image/*" hidden>
+                        </div>
+                        <!-- Preview replaces content -->
+                        <div class="preview-container" id="previewContainer" style="display:none;">
+                            <img id="previewImage" alt="Preview">
+                            <button class="btn-close" id="clearPreview" title="Xóa">&times;</button>
+                        </div>
+                    </div>
+                    <button class="btn btn-accent btn-search" id="searchBtn" disabled>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        Tìm kiếm ảnh tương tự
+                    </button>
+                </div>
+
+                <!-- Wavelet Visualization -->
+                <div class="card wavelet-card" id="waveletCard" style="display:none;">
+                    <h2 class="card-title">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12L7 2L12 12L17 2L22 12"/></svg>
+                        Phân tích Wavelet
+                    </h2>
+                    <div class="wavelet-viz">
+                        <img id="waveletImage" alt="Wavelet Decomposition">
+                    </div>
+                    <div class="hash-info" id="hashInfo"></div>
+                </div>
+            </div>
+
+            <!-- Loading -->
+            <div class="loading" id="loading" style="display:none;">
+                <div class="spinner"></div>
+                <p>Đang tìm kiếm ảnh tương tự...</p>
+            </div>
+
+            <!-- Results -->
+            <div id="resultsSection" style="display:none;">
+                <div class="results-header">
+                    <h2>
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                        Kết quả tìm kiếm
+                    </h2>
+                    <span class="results-count" id="resultsCount"></span>
+                </div>
+                <div class="results-grid" id="resultsGrid"></div>
+            </div>
+        </section>
+
+        <!-- Database Tab -->
+        <section class="tab-content" id="databaseTab">
+            <div class="db-header">
+                <h2>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                    Cơ sở dữ liệu hình ảnh
+                </h2>
+                <div class="db-actions">
+                    <button class="btn btn-primary" id="uploadToDbBtn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        Thêm ảnh vào DB
+                    </button>
+                    <input type="file" id="dbFileInput" accept="image/*" multiple hidden>
+                </div>
+            </div>
+            <div class="db-grid" id="dbGrid">
+                <!-- Images will be loaded here -->
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>Wavelet Image Search Engine &mdash; Lab 4 Extended &mdash; DWT + Hamming Distance</p>
+        </div>
+    </footer>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
