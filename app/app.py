@@ -36,6 +36,7 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'bmp', 'tif', 'tiff'}
 # ── Initialize Database ───────────────────────────────────────────────────
 db = ImageDatabase(db_dir=str(DB_IMAGE_DIR))
 
+# Hàm khởi tạo database
 def init_database():
     """Index existing dataset images on startup."""
     count = 0
@@ -58,13 +59,13 @@ def allowed_file(filename):
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────
-
+# Route chính
 @app.route('/')
 def index():
     """Main page."""
     return render_template('index.html')
 
-
+# API tìm kiếm ảnh
 @app.route('/api/search', methods=['POST'])
 def api_search():
     """
@@ -79,34 +80,40 @@ def api_search():
         return jsonify({'error': 'Invalid file'}), 400
     
     top_k = request.form.get('top_k', 20, type=int)
-    
+    level = request.form.get('level', 1, type=int)
+    min_similarity = request.form.get('min_similarity', 0, type=float)
+
+    # Giới hạn level hợp lệ
+    level = max(1, min(3, level))
+
     # Save query temporarily
     ext = file.filename.rsplit('.', 1)[1].lower()
     query_filename = f"query_{uuid.uuid4().hex[:8]}.{ext}"
     query_path = str(UPLOAD_DIR / query_filename)
     file.save(query_path)
-    
+
     try:
         # Read image
         img = cv2.imread(query_path)
         if img is None:
             return jsonify({'error': 'Cannot read image'}), 400
-        
-        # Search
-        results = db.search(img, top_k=top_k)
-        
-        # Generate wavelet visualization for query
-        wavelet_viz = get_wavelet_visualization(img)
-        
+
+        # Search with level and min_similarity
+        results = db.search(img, top_k=top_k, level=level, min_similarity=min_similarity)
+
+        # Generate wavelet visualization for query (theo level đã chọn)
+        wavelet_viz = get_wavelet_visualization(img, level=level)
+
         # Compute query hash info
-        q_hash = wavelet_hash(img)
+        q_hash = wavelet_hash(img, level=level)
         
         return jsonify({
             'query': {
                 'filename': query_filename,
                 'url': f'/uploads/{query_filename}',
                 'wavelet_viz': wavelet_viz,
-                'hash_size': len(q_hash)
+                'hash_size': len(q_hash),
+                'level': level
             },
             'results': [
                 {
@@ -123,7 +130,7 @@ def api_search():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-
+# API upload ảnh
 @app.route('/api/upload', methods=['POST'])
 def api_upload():
     """Upload a new image to the database."""
@@ -149,7 +156,7 @@ def api_upload():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-
+# API lấy danh sách ảnh trong database
 @app.route('/api/images', methods=['GET'])
 def api_images():
     """Get all images in database."""
@@ -166,7 +173,7 @@ def api_images():
         'total': db.get_image_count()
     })
 
-
+# API lấy wavelet visualization cho ảnh trong database
 @app.route('/api/wavelet/<filename>', methods=['GET'])
 def api_wavelet(filename):
     """Get wavelet visualization for a database image."""
@@ -179,12 +186,14 @@ def api_wavelet(filename):
     return jsonify({'wavelet_viz': viz, 'filename': filename})
 
 
+# API serve ảnh upload
 @app.route('/uploads/<filename>')
 def serve_upload(filename):
     """Serve uploaded query images."""
     return send_from_directory(str(UPLOAD_DIR), filename)
 
 
+# API server ảnh database
 @app.route('/database/<path:filename>')
 def serve_database(filename):
     """Serve database images (from any indexed directory)."""
@@ -196,6 +205,7 @@ def serve_database(filename):
     return "Not found", 404
 
 
+# Hàm lấy URL ảnh
 def get_image_url(filename, filepath):
     """Helper: resolve image URL based on its actual path."""
     filepath = str(filepath)

@@ -14,15 +14,16 @@ import base64
 from pathlib import Path
 
 
-def wavelet_hash(image, size=(64, 64), wavelet='haar'):
+def wavelet_hash(image, size=(64, 64), wavelet='haar', level=1):
     """
     Compute wavelet hash for an image using DWT.
-    
+
     Args:
         image: BGR image (numpy array) or file path string
         size: resize target (default 64x64)
         wavelet: wavelet type (default 'haar')
-    
+        level: DWT decomposition level (1, 2, or 3)
+
     Returns:
         1D boolean array (the hash)
     """
@@ -30,28 +31,28 @@ def wavelet_hash(image, size=(64, 64), wavelet='haar'):
         image = cv2.imread(image)
         if image is None:
             raise ValueError(f"Cannot read image: {image}")
-    
+
     # Convert to grayscale
     if len(image.shape) == 3:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     else:
         gray = image.copy()
-    
+
     # Resize and normalize
     gray = cv2.resize(gray, size)
     gray = np.float32(gray) / 255.0
-    
-    # Discrete Wavelet Transform (level 1)
-    coeffs = pywt.wavedec2(gray, wavelet, level=1)
-    LL, (LH, HL, HH) = coeffs
-    
+
+    # Discrete Wavelet Transform
+    coeffs = pywt.wavedec2(gray, wavelet, level=level)
+    LL = coeffs[0]
+
     # Create hash from LL subband
     avg = np.mean(LL)
     diff = LL > avg
-    
+
     return diff.flatten()
 
-
+# Hàm tính khoảng cách Hamming
 def hamming_distance(hash1, hash2):
     """
     Compute Hamming distance between two hashes.
@@ -64,32 +65,35 @@ def hamming_distance(hash1, hash2):
     """
     return int(np.count_nonzero(hash1 != hash2))
 
-
-def get_wavelet_visualization(image, size=(256, 256), wavelet='haar'):
+# Hàm tạo wavelet visualization
+def get_wavelet_visualization(image, size=(256, 256), wavelet='haar', level=1):
     """
     Generate wavelet decomposition visualization (LL, LH, HL, HH subbands).
-    
+
     Args:
         image: BGR image (numpy array) or file path
         size: resize target
         wavelet: wavelet type
-    
+        level: DWT decomposition level (1, 2, or 3)
+
     Returns:
         PNG image bytes (base64 encoded string)
     """
     if isinstance(image, str):
         image = cv2.imread(image)
-    
+
     if len(image.shape) == 3:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     else:
         gray = image.copy()
-    
+
     gray = cv2.resize(gray, size)
     gray = np.float32(gray) / 255.0
-    
-    coeffs = pywt.wavedec2(gray, wavelet, level=1)
-    LL, (LH, HL, HH) = coeffs
+
+    coeffs = pywt.wavedec2(gray, wavelet, level=level)
+    # coeffs[0] = LL ở level cao nhất, coeffs[1] = (LH, HL, HH) ở level cao nhất
+    LL = coeffs[0]
+    LH, HL, HH = coeffs[1]
     
     # Normalize each subband for visualization
     def normalize(arr):
@@ -136,6 +140,7 @@ class ImageDatabase:
         if db_dir:
             os.makedirs(db_dir, exist_ok=True)
     
+    # Hàm thêm ảnh vào database
     def add_image(self, filepath, category='unknown'):
         """
         Add an image to the database.
@@ -164,6 +169,7 @@ class ImageDatabase:
         
         return filename
     
+    # Hàm index ảnh trong thư mục
     def index_directory(self, directory, category='unknown'):
         """
         Index all images in a directory.
@@ -189,15 +195,17 @@ class ImageDatabase:
         
         return count
     
-    def search(self, query_image, top_k=10, threshold=None):
+    # Hàm tìm kiếm ảnh
+    def search(self, query_image, top_k=10, level=1, min_similarity=0):
         """
         Search for similar images.
-        
+
         Args:
             query_image: BGR image (numpy array) or file path
             top_k: number of results to return
-            threshold: optional max Hamming distance threshold
-        
+            level: DWT decomposition level (1, 2, or 3)
+            min_similarity: minimum similarity percentage (0-100) to include in results
+
         Returns:
             list of { filename, path, distance, similarity, category }
         """
@@ -205,34 +213,36 @@ class ImageDatabase:
             img = cv2.imread(query_image)
         else:
             img = query_image
-        
+
         if img is None:
             return []
-        
-        query_hash = wavelet_hash(img)
+
+        query_hash = wavelet_hash(img, level=level)
         hash_len = len(query_hash)
-        
+
         results = []
         for filename, data in self.images.items():
-            dist = hamming_distance(query_hash, data['hash'])
-            similarity = 1.0 - (dist / hash_len) if hash_len > 0 else 0.0
-            
-            if threshold is not None and dist > threshold:
+            db_hash = wavelet_hash(data['path'], level=level)
+            dist = hamming_distance(query_hash, db_hash)
+            similarity = round((1.0 - (dist / hash_len)) * 100, 2) if hash_len > 0 else 0.0
+
+            if similarity < min_similarity:
                 continue
-            
+
             results.append({
                 'filename': filename,
                 'path': data['path'],
                 'distance': dist,
-                'similarity': round(similarity * 100, 2),
+                'similarity': similarity,
                 'category': data['category']
             })
-        
+
         # Sort by distance (ascending)
         results.sort(key=lambda x: x['distance'])
-        
+
         return results[:top_k]
     
+    # Hàm lấy tất cả ảnh trong database
     def get_all_images(self):
         """Get list of all images in database."""
         return [
@@ -244,10 +254,12 @@ class ImageDatabase:
             for fname, data in self.images.items()
         ]
     
+    # Hàm đếm số ảnh trong database
     def get_image_count(self):
         """Get total number of images in database."""
         return len(self.images)
     
+    # Hàm lưu ảnh upload
     def save_uploaded_image(self, file_storage, filename):
         """
         Save an uploaded image to the database directory and index it.

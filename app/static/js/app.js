@@ -28,7 +28,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchTab = document.getElementById('searchTab');
     const databaseTab = document.getElementById('databaseTab');
 
+    const levelSelect = document.getElementById('levelSelect');
+    const thresholdRange = document.getElementById('thresholdRange');
+    const thresholdValue = document.getElementById('thresholdValue');
+
     let selectedFile = null;
+
+    // ── Threshold slider live update ──────────────────────
+    thresholdRange.addEventListener('input', () => {
+        thresholdValue.textContent = thresholdRange.value;
+    });
 
     // ── Tab Navigation ────────────────────────────────────
     document.querySelectorAll('.tab').forEach(tab => {
@@ -117,6 +126,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const formData = new FormData();
         formData.append('image', selectedFile);
         formData.append('top_k', 20);
+        formData.append('level', levelSelect.value);
+        formData.append('min_similarity', thresholdRange.value);
 
         try {
             const res = await fetch('/api/search', { method: 'POST', body: formData });
@@ -130,7 +141,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Show wavelet visualization
             if (data.query && data.query.wavelet_viz) {
                 waveletImage.src = 'data:image/png;base64,' + data.query.wavelet_viz;
-                hashInfo.textContent = `Hash size: ${data.query.hash_size} bits  |  Wavelet: Haar  |  DWT Level: 1`;
+                hashInfo.textContent = `Hash size: ${data.query.hash_size} bits  |  Wavelet: Haar  |  DWT Level: ${data.query.level}  |  Ngưỡng: ≥${thresholdRange.value}%`;
                 waveletCard.style.display = 'block';
             }
 
